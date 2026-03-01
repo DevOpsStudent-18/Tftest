@@ -1,90 +1,101 @@
-# Entra ID (Azure AD) App Registration and SSO
-# Note: App registration for Entra ID (Azure AD) is typically done via Azure Portal or CLI.
-# You can use the Azure CLI or Terraform provider for AzureAD to automate this if needed.
-# Example (not included here):
-# resource "azuread_application" "frontend" { ... }
-# resource "azuread_application" "backend" { ... }
-# resource "azuread_service_principal" ...
-# resource "azuread_app_role_assignment" ...
-#
-# For SSO, configure authentication settings in App Service to use Entra ID.
-# See Azure documentation for details on App Service authentication/authorization.
-
-# Azure provider
-provider "azurerm" {
-  features {}
+# Use existing Resource Group
+data "azurerm_resource_group" "rg" {
+  name = var.resource_group_name
 }
 
-# Resource group
-resource "azurerm_resource_group" "rg" {
-  name     = var.resource_group_name
-  location = var.location
-}
-
-# Storage account (required for App Service)
-terraform {
-  cloud {
-    organization = "testtfproj"
-    workspaces {
-      name = "testcliworkspace"
-    }
-  }
-}
-  location                 = azurerm_resource_group.rg.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
-
-# App Service Plan
-resource "azurerm_app_service_plan" "app_service_plan" {
+###################################
+# App Service Plan (Linux)
+###################################
+resource "azurerm_service_plan" "asp" {
   name                = var.app_service_plan_name
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  sku {
-    tier = "Basic"
-    size = "B1"
-  }
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
+  os_type             = "Linux"
+  sku_name            = "B1"
 }
 
-# App Service (API)
-resource "azurerm_app_service" "api" {
-  name                = var.api_app_name
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  app_service_plan_id = azurerm_app_service_plan.app_service_plan.id
-}
-
-# App Service (UI)
-resource "azurerm_app_service" "ui" {
-  name                = var.ui_app_name
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  app_service_plan_id = azurerm_app_service_plan.app_service_plan.id
-}
-
-# Log Analytics Workspace
-resource "azurerm_log_analytics_workspace" "log_analytics" {
+###################################
+# Log Analytics
+###################################
+resource "azurerm_log_analytics_workspace" "law" {
   name                = var.log_analytics_workspace_name
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
 }
 
+###################################
 # Application Insights
-resource "azurerm_application_insights" "appinsights" {
+###################################
+resource "azurerm_application_insights" "appi" {
   name                = var.app_insights_name
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
   application_type    = "web"
-  workspace_id        = azurerm_log_analytics_workspace.log_analytics.id
+  workspace_id        = azurerm_log_analytics_workspace.law.id
 }
 
-# Key Vault
+###################################
+# Backend API - .NET 8
+###################################
+resource "azurerm_linux_web_app" "api" {
+  name                = var.api_app_name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
+  service_plan_id     = azurerm_service_plan.asp.id
+  https_only          = true
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  site_config {
+    application_stack {
+      dotnet_version = "8.0"
+    }
+  }
+
+  app_settings = {
+    "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.appi.connection_string
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE"   = "false"
+  }
+}
+
+###################################
+# Frontend UI - Angular (Node 18)
+###################################
+resource "azurerm_linux_web_app" "ui" {
+  name                = var.ui_app_name
+  location            = data.azurerm_resource_group.rg.location
+  resource_group_name = data.azurerm_resource_group.rg.name
+  service_plan_id     = azurerm_service_plan.asp.id
+  https_only          = true
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  site_config {
+    application_stack {
+      node_version = "18-lts"
+    }
+  }
+
+  app_settings = {
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
+  }
+}
+
+###################################
+# Key Vault (Access configured manually)
+###################################
 resource "azurerm_key_vault" "kv" {
-  name                = var.key_vault_name
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  tenant_id           = var.tenant_id
-  sku_name            = "standard"
+  name                       = var.key_vault_name
+  location                   = data.azurerm_resource_group.rg.location
+  resource_group_name        = data.azurerm_resource_group.rg.name
+  tenant_id                  = var.tenant_id
+  sku_name                   = "standard"
+  purge_protection_enabled   = false
+  soft_delete_retention_days = 7
 }

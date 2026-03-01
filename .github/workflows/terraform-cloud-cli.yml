@@ -1,37 +1,32 @@
-name: Terraform Cloud CLI Remote Run
+name: Terraform
 
 on:
   push:
     branches:
-      - devclitest
-  workflow_dispatch:
+      - localtest
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./
-    env:
-      TF_CLOUD_ORGANIZATION: testtfproj
-      TF_WORKSPACE: testcliworkspace
-      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.1.7
 
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan (dev)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devclitest'
-        run: terraform plan -var-file="environments/dev.tfvars"
+      - name: Terraform Plan
+        run: terraform plan -var-file=environments/dev.tfvars
 
-      - name: Terraform Apply (dev)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devclitest'
-        run: terraform apply -auto-approve -var-file="environments/dev.tfvars"
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -var-file=environments/dev.tfvars
+
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
