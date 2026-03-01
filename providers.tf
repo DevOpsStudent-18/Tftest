@@ -1,7 +1,5 @@
 provider "azurerm" {
+  skip_provider_registration = true
   features {}
 }
 
-provider "azuread" {
-  # Configuration can be added if needed
-}

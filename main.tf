@@ -1,6 +1,9 @@
-# Use existing Resource Group
-data "azurerm_resource_group" "rg" {
-  name = var.resource_group_name
+###################################
+# Use Existing Resource Group
+###################################
+locals {
+  rg_name   = "kml_rg_main-8a1bac3ffa694e5d"        # Hardcoded resource group name
+  location  = "East US"       # Optional: location here too
 }
 
 ###################################
@@ -8,8 +11,8 @@ data "azurerm_resource_group" "rg" {
 ###################################
 resource "azurerm_service_plan" "asp" {
   name                = var.app_service_plan_name
-  location            = data.azurerm_resource_group.rg.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  location            = local.location
+  resource_group_name = local.rg_name
   os_type             = "Linux"
   sku_name            = "B1"
 }
@@ -19,8 +22,8 @@ resource "azurerm_service_plan" "asp" {
 ###################################
 resource "azurerm_log_analytics_workspace" "law" {
   name                = var.log_analytics_workspace_name
-  location            = data.azurerm_resource_group.rg.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  location            = local.location
+  resource_group_name = local.rg_name
   sku                 = "PerGB2018"
   retention_in_days   = 30
 }
@@ -30,19 +33,19 @@ resource "azurerm_log_analytics_workspace" "law" {
 ###################################
 resource "azurerm_application_insights" "appi" {
   name                = var.app_insights_name
-  location            = data.azurerm_resource_group.rg.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  location            = local.location
+  resource_group_name = local.rg_name
   application_type    = "web"
   workspace_id        = azurerm_log_analytics_workspace.law.id
 }
 
 ###################################
-# Backend API - .NET 8
+# Backend API (.NET 8)
 ###################################
 resource "azurerm_linux_web_app" "api" {
   name                = var.api_app_name
-  location            = data.azurerm_resource_group.rg.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  location            = local.location
+  resource_group_name = local.rg_name
   service_plan_id     = azurerm_service_plan.asp.id
   https_only          = true
 
@@ -63,12 +66,12 @@ resource "azurerm_linux_web_app" "api" {
 }
 
 ###################################
-# Frontend UI - Angular (Node 18)
+# Frontend UI (Angular - Node 18)
 ###################################
 resource "azurerm_linux_web_app" "ui" {
   name                = var.ui_app_name
-  location            = data.azurerm_resource_group.rg.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  location            = local.location
+  resource_group_name = local.rg_name
   service_plan_id     = azurerm_service_plan.asp.id
   https_only          = true
 
@@ -88,12 +91,12 @@ resource "azurerm_linux_web_app" "ui" {
 }
 
 ###################################
-# Key Vault (Access configured manually)
+# Key Vault
 ###################################
 resource "azurerm_key_vault" "kv" {
   name                       = var.key_vault_name
-  location                   = data.azurerm_resource_group.rg.location
-  resource_group_name        = data.azurerm_resource_group.rg.name
+  location                   = local.location
+  resource_group_name        = local.rg_name
   tenant_id                  = var.tenant_id
   sku_name                   = "standard"
   purge_protection_enabled   = false
